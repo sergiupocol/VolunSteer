@@ -72,9 +72,6 @@ for organization in leads_soup.find_all('fieldset'):
         org_name = org_name[:len(org_name) - 18]
         for position in organization.find_all('a'):
             if (position.parent.name == 'div'):
-                print(org_name)
-                print(position.text)
-                print('https://leads.uwaterloo.ca' + position.get('href'))
                 leads_info.append([org_name, position.text, 'https://leads.uwaterloo.ca' + position.get('href')])
     except:
         continue
@@ -131,7 +128,6 @@ for pending_pos in pending_list:
     except:
         continue
 pending_positions = pd.DataFrame(pending_info, columns=['Organization', 'Job Name'])
-print(pending_positions)
 
 
 driver.get('https://volunteer.feds.ca/Listings.php?ListType=Volunteer_PositionsAll&MenuItemID=1')
@@ -151,8 +147,6 @@ for index, row in leads_positions.iterrows():
 
 
     for index_pending, row_pending in pending_positions.iterrows():
-        print(((row['Organization'] in row_pending['Organization']) or (row_pending['Organization'] in row['Organization']))
-                and ((row['Job Name'] in row_pending['Job Name']) or (row_pending['Job Name'] in row['Job Name'])))
         if (((row['Organization'] in row_pending['Organization']) or (row_pending['Organization'] in row['Organization']))
                 and ((row['Job Name'] in row_pending['Job Name']) or (row_pending['Job Name'] in row['Job Name']))):
             match = True
@@ -194,7 +188,6 @@ for index, row in leads_positions.iterrows():
 
 
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminPosition_Title"]').send_keys(row['Job Name'])
-    print(text_info.index('Job Description: '))
     description = text_info[(text_info.index('Job Description: ') + len('Job Description: ')):text_info.index(' Application Open')]
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminDuties"]').send_keys(description)
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminAreasOfInterest1"]').click()
