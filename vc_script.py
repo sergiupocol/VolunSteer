@@ -8,22 +8,20 @@ import time
 import datetime
 
 
-password = input("Please enter the MySQL password:\n")
-
 
 num_pos = input('How many positions would you like to add?\n')
 
 num_pos_val = int(num_pos)
-name = input("Please enter your name:\n")
-
-
 
 
 ### SET UP CHROME DOWNLOAD OPTIONS
 chrome_options = webdriver.ChromeOptions()
 prefs = {'download.default_directory':os.getcwd()}
 chrome_options.add_experimental_option('prefs', prefs)
-driver = webdriver.Chrome('/Users/sergiupocol/PycharmProjects/vc_script/chromedriver', options=chrome_options)
+
+
+# CHANGE THIS TO WORK FOR ANYONE
+driver = webdriver.Chrome(os.getcwd() + '/chromedriver', options=chrome_options)
 # Optional argument, if not specified will search path.
 
 #################################################################################
@@ -58,13 +56,6 @@ login_button.click()
 main_menu = driver.find_element_by_xpath('//*[@id="main-menu"]/ul/li[4]/a')
 main_menu.click()
 
-
-
-
-
-# SHOULD I USE A DICTIONARY WITH EMPLOYER AS KEY AND AN ARRAY OF TITLES AS VALUE?
-# ORRRRR SHOULD I INSTEAD CLICK THE LINKS AND GRAB THE INFO FROM THE SEPERATE PAGES (would require going back) <--- trying this
-
 # A table w 3 columns
 leads_info = []
 
@@ -85,8 +76,6 @@ for organization in leads_soup.find_all('fieldset'):
                 print(position.text)
                 print('https://leads.uwaterloo.ca' + position.get('href'))
                 leads_info.append([org_name, position.text, 'https://leads.uwaterloo.ca' + position.get('href')])
-            #print(position)
-            ## THE CLASS OF THE PARENT NEEDS TO BE DIV CELL 2
     except:
         continue
     finally:
@@ -98,11 +87,6 @@ for organization in leads_soup.find_all('fieldset'):
 ## THEN SEARCH EACH ROW IN THE VC DATABSE
 
 leads_positions = pd.DataFrame(leads_info, columns = ['Organization', 'Job Name', 'URL'])
-
-
-
-
-
 
 #################################################################################
 # VOLUNTEERING CENTER
@@ -127,24 +111,27 @@ vc_username_box.send_keys(vc_username)
 vc_password_box.send_keys(vc_password)
 
 # click LOGIN
-(driver.find_element_by_name('cls_logon_submit')).click()
+driver.find_element_by_name('cls_logon_submit').click()
 
 ## HERE ENSURE THAT ANOTHER VOLUNTEER DIDN'T ALREADY TRY TO ENTER THE POSITION
 driver.get('https://volunteer.feds.ca/AdminListings.php?ListType=Volunteer_Positionsadmin&Position_Status=1')
 
-vc_pending_soup = BeautifulSoup(driver.page_source, 'html.parser')
-print(vc_pending_soup)
-pending_positions = []
-for row_pos in vc_pending_soup.find_all('tr'):
+
+
+
+pending_info = []
+pending_positions_soup = BeautifulSoup(driver.page_source, 'html.parser')
+pending_list = pending_positions_soup.find_all('tr', class_='listTableRow listTableRowEven') + pending_positions_soup.find_all('tr', class_='listTableRow listTableRowOdd')
+
+for pending_pos in pending_list:
     try:
-        position_title = row_pos.find('a').text
-        print(position_title)
+        organization = pending_pos.find('td', class_='listCell colnum_2 mode-normal').text.strip('\n')
+        title = pending_pos.find('a').text
+        pending_info.append([organization, title])
     except:
         continue
-    finally:
-        3
-
-
+pending_positions = pd.DataFrame(pending_info, columns=['Organization', 'Job Name'])
+print(pending_positions)
 
 
 driver.get('https://volunteer.feds.ca/Listings.php?ListType=Volunteer_PositionsAll&MenuItemID=1')
@@ -158,7 +145,20 @@ for index, row in leads_positions.iterrows():
     driver.find_element_by_name("Action").click()
     if (driver.find_element_by_id('listCellNoMatch_Volunteer_PositionsAll') == None):
         continue
+    ### NOW CHECK IF THERES A MATCH WITH PENDING POSITIONS
+    match = False
 
+
+
+    for index_pending, row_pending in pending_positions.iterrows():
+        print(((row['Organization'] in row_pending['Organization']) or (row_pending['Organization'] in row['Organization']))
+                and ((row['Job Name'] in row_pending['Job Name']) or (row_pending['Job Name'] in row['Job Name'])))
+        if (((row['Organization'] in row_pending['Organization']) or (row_pending['Organization'] in row['Organization']))
+                and ((row['Job Name'] in row_pending['Job Name']) or (row_pending['Job Name'] in row['Job Name']))):
+            match = True
+    if match:
+        driver.get('https://volunteer.feds.ca/Listings.php?ListType=Volunteer_PositionsAll&MenuItemID=1')
+        continue
 
 
     # NOW DO ALL THE STUFF HERE
@@ -187,7 +187,8 @@ for index, row in leads_positions.iterrows():
         if (parent.get_attribute('class') != 'requiredField AEFField AEFField AEFFieldVolunteer_PositionsAdminAgency_number'):
             continue
 
-        if (org_option.text.strip() in row['Organization']) or (row['Organization'] in org_option.text.strip()):
+        if (org_option.text.strip() in row['Organization']) or \
+                (row['Organization'] in org_option.text.strip()):
             org_option.click()
             break
 
@@ -197,11 +198,10 @@ for index, row in leads_positions.iterrows():
     description = text_info[(text_info.index('Job Description: ') + len('Job Description: ')):text_info.index(' Application Open')]
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminDuties"]').send_keys(description)
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminAreasOfInterest1"]').click()
-    end_date = text_info[text_info.index('Application Deadline: ') + len('Application Deadline: '):text_info.index(' PM')]
-
-    print(end_date)
-
-
+    try:
+        end_date = text_info[text_info.index('Application Deadline: ') + len('Application Deadline: '):text_info.index(' PM')]
+    except:
+        end_date = datetime.datetime.today()
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminTerm_Date"]').send_keys(end_date[:len(end_date) - 6])
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminDuration"]/option[3]').click()
     driver.find_element_by_xpath('//*[@id="Volunteer_PositionsAdminSpecialeventdate"]').clear()
@@ -218,11 +218,6 @@ for index, row in leads_positions.iterrows():
     num_pos_val = num_pos_val - 1
     driver.get('https://volunteer.feds.ca/Listings.php?ListType=Volunteer_PositionsAll&MenuItemID=1')
     #### SERGIU MAKE SURE U RETURN TO THE PREVIOUS PAGE
-
-
-
-
-
 
 
 print("DONE! Please go and review the information and publish the positions!")
